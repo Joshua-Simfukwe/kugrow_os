@@ -46,6 +46,25 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
-# ProductPrice
-# StockBatch
+
 # InventoryTransaction
+class InventoryTransaction(models.Model):
+    TRANSACTION_TYPES = [
+        ('IN', 'Stock In'),
+        ('OUT', 'Stock Out'),
+        ('ADJUST', 'Adjustment'),
+        ('DAMAGED', 'Damaged'),
+        ('MISSING', 'Missing'),
+    ]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.IntegerField()
+    transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPES)
+    
+    reference = models.CharField(max_length=255, blank=True, null=True)
+    note = models.TextField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.product.name} - {self.transaction_type} - {self.quantity}"
