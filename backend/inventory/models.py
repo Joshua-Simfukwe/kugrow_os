@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 
 # Create your models here.
 # Category
@@ -68,3 +69,25 @@ class InventoryTransaction(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - {self.transaction_type} - {self.quantity}"
+
+    def clean(self):
+        if self.transaction_type in ['OUT', 'DAMAGED', 'MISSING']:
+            if self.product.current_stock < self.quantity:
+                raise ValidationError("Not enough stock available")
+
+    def save(self, *args, **kwargs):
+        if self.transaction_type == 'IN':
+            self.product.current_stock += self.quantity
+
+        elif self.transaction_type == 'OUT':
+            self.product.current_stock -= self.quantity
+
+        elif self.transaction_type == 'ADJUST':
+            self.product.current_stock = self.quantity
+
+        elif self.transaction_type in ['DAMAGED', 'MISSING']:
+            self.product.current_stock -= self.quantity
+
+        self.product.save()
+
+        super().save(*args, **kwargs)
