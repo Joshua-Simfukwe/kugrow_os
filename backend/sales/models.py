@@ -35,15 +35,21 @@ class SaleItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None  # check if creating for first time
+
         super().save(*args, **kwargs)
 
-        # create inventory transaction (stock out)
-        InventoryTransaction.objects.create(
-            product=self.product,
-            quantity=self.quantity,
-            transaction_type='OUT',
-            reference=f"Sale {self.sale.id}"
-        )
+        if is_new:
+            # create inventory transaction only once
+            InventoryTransaction.objects.create(
+                product=self.product,
+                quantity=self.quantity,
+                transaction_type='OUT',
+                reference=f"Sale {self.sale.id}"
+            )
+
+        # update total every time
+        self.sale.calculate_total()
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
