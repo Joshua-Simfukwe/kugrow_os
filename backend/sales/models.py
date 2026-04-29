@@ -51,6 +51,21 @@ class SaleItem(models.Model):
         # update total every time
         self.sale.calculate_total()
 
+    def delete(self, *args, **kwargs):
+        # restore stock when item is removed
+        InventoryTransaction.objects.create(
+            product=self.product,
+            quantity=self.quantity,
+            transaction_type='IN',
+            reference=f"Delete SaleItem {self.id}"
+        )
+
+        super().delete(*args, **kwargs)
+
+        # update sale total after deletion
+        self.sale.calculate_total()
+
+
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
 
