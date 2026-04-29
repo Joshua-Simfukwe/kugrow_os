@@ -35,20 +35,26 @@ class SaleItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def save(self, *args, **kwargs):
-        is_new = self.pk is None  # check if creating for first time
+        is_new = self._state.adding  # ✅ correct way
+
+        if not is_new:
+            old_item = SaleItem.objects.get(pk=self.pk)
+            difference = self.quantity - old_item.quantity
+        else:
+            difference = self.quantity
 
         super().save(*args, **kwargs)
 
-        if is_new:
-            # create inventory transaction only once
+        if difference != 0:
+            transaction_type = 'OUT' if difference > 0 else 'IN'
+
             InventoryTransaction.objects.create(
                 product=self.product,
-                quantity=self.quantity,
-                transaction_type='OUT',
+                quantity=abs(difference),
+                transaction_type=transaction_type,
                 reference=f"Sale {self.sale.id}"
             )
 
-        # update total every time
         self.sale.calculate_total()
 
     def delete(self, *args, **kwargs):
