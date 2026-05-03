@@ -14,6 +14,8 @@ export default function POS() {
 
   const [loading, setLoading] = useState(false);
 
+  const [search, setSearch] = useState("");
+
   // Load products
   useEffect(() => {
     axios.get("http://localhost:8000/api/products/")
@@ -54,6 +56,11 @@ export default function POS() {
   const change = amountReceived
     ? (amountReceived - total).toFixed(2)
     : 0;
+  
+  //filteredProducts
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   // Complete sale
   const completeSale = async () => {
@@ -94,8 +101,24 @@ export default function POS() {
         <div>
           <h2>Products</h2>
 
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "10px",
+              marginBottom: "10px",
+              borderRadius: "6px",
+              border: "1px solid #444",
+              background: "#2f2f2f",
+              color: "white"
+            }}
+          />          
+
           <div className="products-grid">
-            {products.map(p => (
+            {filteredProducts.map(p => (
               <div
                 key={p.id}
                 className="product-card"
@@ -107,6 +130,10 @@ export default function POS() {
             ))}
           </div>
         </div>
+
+        {filteredProducts.length === 0 && (
+          <p style={{ marginTop: "10px" }}>No products found</p>
+        )}
 
         {/* CART */}
         <div className="cart">
