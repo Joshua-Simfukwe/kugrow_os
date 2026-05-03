@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 export default function POS() {
@@ -15,15 +15,12 @@ export default function POS() {
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
+  const searchRef = useRef(null);
 
-  // Load products
-  useEffect(() => {
-    axios.get("http://localhost:8000/api/products/")
-      .then(res => setProducts(res.data))
-      .catch(err => console.error(err));
-  }, []);
+  // -------------------------
+  // FUNCTIONS (declare BEFORE useEffect)
+  // -------------------------
 
-  // Add to cart
   const addToCart = (product) => {
     const existing = cart.find(item => item.id === product.id);
 
@@ -38,7 +35,6 @@ export default function POS() {
     }
   };
 
-  // Update quantity
   const updateQuantity = (index, qty) => {
     if (qty < 1) return;
 
@@ -47,7 +43,93 @@ export default function POS() {
     setCart(newCart);
   };
 
-  // Calculate total
+  // -------------------------
+  // EFFECTS
+  // -------------------------
+
+  // Load products (runs once)
+  useEffect(() => {
+    axios.get("http://localhost:8000/api/products/")
+      .then(res => setProducts(res.data))
+      .catch(err => console.error(err));
+  }, []);
+
+  // Focus search (runs once)
+  useEffect(() => {
+    if (searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, []);
+
+  // Keyboard shortcuts
+useEffect(() => {
+  const handleKeyDown = (e) => {
+    const isInputFocused = document.activeElement.tagName === "INPUT";
+
+    // ESC always works
+    if (e.key === "Escape") {
+      setShowPayment(false);
+      setShowReceipt(false);
+      return;
+    }
+
+    if (isInputFocused) return;
+
+    // ENTER → open payment
+    if (e.key === "Enter" && cart.length > 0) {
+      setShowPayment(true);
+    }
+
+    // + increase last item
+    if (e.key === "+") {
+      setCart(prevCart => {
+        if (prevCart.length === 0) return prevCart;
+
+        const newCart = [...prevCart];
+        const lastIndex = newCart.length - 1;
+
+        newCart[lastIndex] = {
+          ...newCart[lastIndex],
+          quantity: newCart[lastIndex].quantity + 1
+        };
+
+        return newCart;
+      });
+    }
+
+    // - decrease last item
+    if (e.key === "-") {
+      setCart(prevCart => {
+        if (prevCart.length === 0) return prevCart;
+
+        const newCart = [...prevCart];
+        const lastIndex = newCart.length - 1;
+
+        if (newCart[lastIndex].quantity <= 1) return newCart;
+
+        newCart[lastIndex] = {
+          ...newCart[lastIndex],
+          quantity: newCart[lastIndex].quantity - 1
+        };
+
+        return newCart;
+      });
+    }
+
+    // Ctrl + Backspace → clear cart
+    if (e.ctrlKey && e.key === "Backspace") {
+      setCart([]);
+    }
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [cart]);
+
+  // -------------------------
+  // CALCULATIONS
+  // -------------------------
+
   const total = cart.reduce(
     (sum, item) => sum + item.quantity * item.selling_price,
     0
@@ -56,13 +138,15 @@ export default function POS() {
   const change = amountReceived
     ? (amountReceived - total).toFixed(2)
     : 0;
-  
-  //filteredProducts
+
   const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase())
+    (p.name || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  // Complete sale
+  // -------------------------
+  // COMPLETE SALE
+  // -------------------------
+
   const completeSale = async () => {
     setLoading(true);
 
@@ -90,6 +174,10 @@ export default function POS() {
     }
   };
 
+  // -------------------------
+  // UI
+  // -------------------------
+
   return (
     <div className="app">
 
@@ -102,6 +190,7 @@ export default function POS() {
           <h2>Products</h2>
 
           <input
+            ref={searchRef}
             type="text"
             placeholder="Search products..."
             value={search}
@@ -115,7 +204,7 @@ export default function POS() {
               background: "#2f2f2f",
               color: "white"
             }}
-          />          
+          />
 
           <div className="products-grid">
             {filteredProducts.map(p => (
@@ -129,11 +218,11 @@ export default function POS() {
               </div>
             ))}
           </div>
-        </div>
 
-        {filteredProducts.length === 0 && (
-          <p style={{ marginTop: "10px" }}>No products found</p>
-        )}
+          {filteredProducts.length === 0 && (
+            <p style={{ marginTop: "10px" }}>No products found</p>
+          )}
+        </div>
 
         {/* CART */}
         <div className="cart">
@@ -187,7 +276,6 @@ export default function POS() {
           <div className="modal-content">
 
             <h2>Payment</h2>
-
             <h1>ZMW {total}</h1>
 
             <select
@@ -210,7 +298,6 @@ export default function POS() {
                   onChange={(e) => setAmountReceived(e.target.value)}
                   style={{ width: "100%", padding: "8px" }}
                 />
-
                 <h3>Change: ZMW {change}</h3>
               </>
             )}
