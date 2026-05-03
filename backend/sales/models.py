@@ -16,17 +16,13 @@ class Sale(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
     is_paid = models.BooleanField(default=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def calculate_total(self):
-        total = sum(item.quantity * item.price for item in self.items.all())
-        self.total_amount = total
-        self.save(update_fields=['total_amount'])
 
     def __str__(self):
         return f"Sale {self.id} - {self.total_amount}"
     
+from django.db import transaction
+
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
@@ -35,42 +31,38 @@ class SaleItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def save(self, *args, **kwargs):
-        is_new = self._state.adding  # ✅ correct way
+        is_new = self._state.adding
 
-        if not is_new:
-            old_item = SaleItem.objects.get(pk=self.pk)
-            difference = self.quantity - old_item.quantity
-        else:
-            difference = self.quantity
+        with transaction.atomic():
 
-        super().save(*args, **kwargs)
+            if not is_new:
+                old_item = SaleItem.objects.get(pk=self.pk)
+                difference = self.quantity - old_item.quantity
+            else:
+                difference = self.quantity
 
-        if difference != 0:
-            transaction_type = 'OUT' if difference > 0 else 'IN'
+            super().save(*args, **kwargs)
 
-            InventoryTransaction.objects.create(
-                product=self.product,
-                quantity=abs(difference),
-                transaction_type=transaction_type,
-                reference=f"Sale {self.sale.id}"
-            )
+            if difference != 0:
+                transaction_type = 'OUT' if difference > 0 else 'IN'
 
-        self.sale.calculate_total()
+                InventoryTransaction.objects.create(
+                    product=self.product,
+                    quantity=abs(difference),
+                    transaction_type=transaction_type,
+                    reference=f"Sale {self.sale.id}"
+                )
 
     def delete(self, *args, **kwargs):
-        # restore stock when item is removed
-        InventoryTransaction.objects.create(
-            product=self.product,
-            quantity=self.quantity,
-            transaction_type='IN',
-            reference=f"Delete SaleItem {self.id}"
-        )
+        with transaction.atomic():
+            InventoryTransaction.objects.create(
+                product=self.product,
+                quantity=self.quantity,
+                transaction_type='IN',
+                reference=f"Delete SaleItem {self.id}"
+            )
 
-        super().delete(*args, **kwargs)
-
-        # update sale total after deletion
-        self.sale.calculate_total()
-
+            super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
