@@ -21,6 +21,7 @@ export default function POS() {
       .catch(err => console.error(err));
   }, []);
 
+  // Add to cart
   const addToCart = (product) => {
     const existing = cart.find(item => item.id === product.id);
 
@@ -35,13 +36,16 @@ export default function POS() {
     }
   };
 
+  // Update quantity
   const updateQuantity = (index, qty) => {
     if (qty < 1) return;
+
     const newCart = [...cart];
     newCart[index].quantity = qty;
     setCart(newCart);
   };
 
+  // Calculate total
   const total = cart.reduce(
     (sum, item) => sum + item.quantity * item.selling_price,
     0
@@ -51,7 +55,7 @@ export default function POS() {
     ? (amountReceived - total).toFixed(2)
     : 0;
 
-  // FINAL CHECKOUT (BACKEND)
+  // Complete sale
   const completeSale = async () => {
     setLoading(true);
 
@@ -80,116 +84,137 @@ export default function POS() {
   };
 
   return (
-    <div style={{ padding: 20, background: "#1e1e1e", color: "white", minHeight: "100vh" }}>
+    <div className="app">
 
       <h1>KUGROW POS</h1>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 20 }}>
+      <div className="layout">
 
         {/* PRODUCTS */}
         <div>
           <h2>Products</h2>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+          <div className="products-grid">
             {products.map(p => (
               <div
                 key={p.id}
+                className="product-card"
                 onClick={() => addToCart(p)}
-                style={{
-                  background: "#333",
-                  padding: 20,
-                  borderRadius: 10,
-                  cursor: "pointer"
-                }}
               >
-                <div>{p.name}</div>
-                <div>ZMW {p.selling_price}</div>
+                <div className="product-name">{p.name}</div>
+                <div className="product-price">ZMW {p.selling_price}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* CART */}
-        <div style={{ background: "#2b2b2b", padding: 15, borderRadius: 10 }}>
+        <div className="cart">
           <h2>Cart</h2>
 
-          {cart.length === 0 ? (
-            <p>No items</p>
-          ) : (
-            cart.map((item, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                <span>{item.name}</span>
+          <div className="cart-items">
+            {cart.length === 0 ? (
+              <p>No items</p>
+            ) : (
+              cart.map((item, i) => (
+                <div key={i} className="cart-item">
+                  <span>{item.name}</span>
 
-                <div>
-                  <button onClick={() => updateQuantity(i, item.quantity - 1)}>-</button>
-                  <span style={{ margin: "0 10px" }}>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(i, item.quantity + 1)}>+</button>
+                  <div className="qty-controls">
+                    <button onClick={() => updateQuantity(i, item.quantity - 1)}>-</button>
+                    {item.quantity}
+                    <button onClick={() => updateQuantity(i, item.quantity + 1)}>+</button>
+                  </div>
+
+                  <span>{item.quantity * item.selling_price}</span>
                 </div>
+              ))
+            )}
+          </div>
 
-                <span>{item.quantity * item.selling_price}</span>
-              </div>
-            ))
-          )}
-
-          <h3>Total: ZMW {total}</h3>
+          <div className="total">
+            ZMW {total}
+          </div>
 
           <button
+            className="button button-primary"
             onClick={() => setShowPayment(true)}
             disabled={cart.length === 0}
-            style={{
-              width: "100%",
-              padding: 10,
-              background: "green",
-              color: "white",
-              border: "none",
-              marginTop: 10
-            }}
           >
             PAY
           </button>
+
+          <button
+            className="button button-secondary"
+            onClick={() => setCart([])}
+          >
+            CLEAR
+          </button>
         </div>
+
       </div>
 
       {/* PAYMENT MODAL */}
       {showPayment && (
-        <div style={modalStyle}>
-          <div style={modalContent}>
+        <div className="modal">
+          <div className="modal-content">
+
             <h2>Payment</h2>
 
             <h1>ZMW {total}</h1>
 
-            <select onChange={(e) => setPaymentMethod(e.target.value)}>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value)}
+              style={{ width: "100%", padding: "8px", marginBottom: "10px" }}
+            >
               <option value="CASH">Cash</option>
-              <option value="AIRTEL">Airtel</option>
-              <option value="MTN">MTN</option>
+              <option value="AIRTEL">Airtel Money</option>
+              <option value="MTN">MTN Money</option>
+              <option value="BANK">Bank Transfer</option>
             </select>
 
-            <input
-              type="number"
-              placeholder="Amount received"
-              value={amountReceived}
-              onChange={(e) => setAmountReceived(e.target.value)}
-            />
+            {paymentMethod === "CASH" && (
+              <>
+                <input
+                  type="number"
+                  placeholder="Amount received"
+                  value={amountReceived}
+                  onChange={(e) => setAmountReceived(e.target.value)}
+                  style={{ width: "100%", padding: "8px" }}
+                />
 
-            <h3>Change: ZMW {change}</h3>
+                <h3>Change: ZMW {change}</h3>
+              </>
+            )}
 
-            <button onClick={completeSale} disabled={loading}>
+            <button
+              className="button button-primary"
+              onClick={completeSale}
+              disabled={loading}
+            >
               {loading ? "Processing..." : "Complete Sale"}
             </button>
 
-            <button onClick={() => setShowPayment(false)}>Cancel</button>
+            <button
+              className="button button-secondary"
+              onClick={() => setShowPayment(false)}
+            >
+              Cancel
+            </button>
+
           </div>
         </div>
       )}
 
       {/* RECEIPT MODAL */}
       {showReceipt && lastSale && (
-        <div style={modalStyle}>
-          <div style={modalContent}>
+        <div className="modal">
+          <div className="modal-content">
 
             <h2>Sale Complete</h2>
 
-            <div className="receipt" id="receipt">
+            <div className="receipt">
 
               <div style={{ textAlign: "center" }}>
                 <b>KUGROW STORE</b>
@@ -202,7 +227,7 @@ export default function POS() {
               <hr />
 
               {lastSale.items.map((item, i) => (
-                <div key={i}>
+                <div key={i} style={{ marginBottom: "5px" }}>
                   <div>{item.product_name}</div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span>{item.quantity} x {item.price}</span>
@@ -217,37 +242,24 @@ export default function POS() {
 
             </div>
 
-            <button onClick={() => window.print()}>
+            <button
+              className="button button-primary"
+              onClick={() => window.print()}
+            >
               Print Receipt
             </button>
 
-            <button onClick={() => setShowReceipt(false)}>
+            <button
+              className="button button-secondary"
+              onClick={() => setShowReceipt(false)}
+            >
               Close
             </button>
 
           </div>
         </div>
       )}
+
     </div>
   );
 }
-
-const modalStyle = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  width: "100%",
-  height: "100%",
-  background: "rgba(0,0,0,0.6)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center"
-};
-
-const modalContent = {
-  background: "white",
-  color: "black",
-  padding: 20,
-  borderRadius: 10,
-  width: "300px"
-};
