@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import AuthLayout from "../../../shared/layouts/AuthLayout";
 import TextInput from "../../../shared/components/TextInput";
@@ -37,12 +38,12 @@ export default function LoginPage() {
       </form>
       <p className="text-center text-sm text-gray-600">
         Don&apos;t have an account?{" "}
-        <a
-          href="/signup"
-          className="font-medium text-black hover:underline"
-        >
-          Sign up
-        </a>
+      <Link
+        to="/signup"
+        className="font-medium text-black hover:underline"
+      >
+        Sign up
+      </Link>
       </p>      
     </AuthLayout>
   );
