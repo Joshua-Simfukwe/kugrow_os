@@ -1,21 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
+import { navigationItems } from "../../config/navigation";
 
 export default function AppSidebar({
   mobileMenuOpen,
   setMobileMenuOpen,
 }) {
   const location = useLocation();
-
-  const navigationItems = [
-    {
-      name: "Dashboard",
-      path: "/dashboard",
-    },
-    {
-      name: "POS",
-      path: "/pos",
-    },
-  ];
 
   return (
     <aside
