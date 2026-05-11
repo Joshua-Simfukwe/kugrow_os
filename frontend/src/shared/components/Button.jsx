@@ -3,22 +3,28 @@ export default function Button({
   type = "button",
   fullWidth = true,
   onClick,
+  disabled = false,
 }) {
   return (
     <button
       type={type}
       onClick={onClick}
+      disabled={disabled}
       className={`
         rounded-xl
-        bg-black
         px-4
         py-3
         text-sm
         font-medium
-        text-white
         transition
-        hover:opacity-90
         active:scale-[0.99]
+
+        ${
+          disabled
+            ? "cursor-not-allowed bg-gray-300 text-gray-500"
+            : "bg-black text-white hover:opacity-90"
+        }
+
         ${fullWidth ? "w-full" : ""}
       `}
     >
