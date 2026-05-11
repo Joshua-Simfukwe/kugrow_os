@@ -5,6 +5,8 @@ import SignupPage from "../features/auth/pages/SignupPage";
 import OrganizationSelectPage from "../features/auth/pages/OrganizationSelectPage";
 import CreateOrganizationPage from "../features/auth/pages/CreateOrganizationPage";
 
+import Dashboard from "../pages/Dashboard";
+import AppLayout from "../shared/layouts/AppLayout";
 import POS from "../pages/POS";
 
 export default function AppRouter() {
@@ -26,7 +28,24 @@ export default function AppRouter() {
       />
 
       {/* POS */}
-      <Route path="/pos" element={<POS />} />
+      <Route
+        path="/pos"
+        element={
+          <AppLayout>
+            <POS />
+          </AppLayout>
+        }
+      />
+
+      {/* DASHBOARD */}
+      <Route
+        path="/dashboard"
+        element={
+          <AppLayout>
+            <Dashboard />
+          </AppLayout>
+        }
+      />
 
       {/* Default Redirect */}
       <Route path="*" element={<Navigate to="/login" replace />} />
