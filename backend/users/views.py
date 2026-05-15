@@ -3,12 +3,13 @@ from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view
 from rest_framework.decorators import authentication_classes
 from rest_framework.decorators import permission_classes
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-
-from .models import OrganizationMembership
+from .models import Branch, OrganizationMembership
 from .serializers import (
     AuthResponseSerializer,
+    BranchSerializer,
     JoinOrganizationSerializer,
     LoginSerializer,
     OnboardingUserSerializer,
@@ -116,3 +117,22 @@ def join_organization(request):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def branch_list(request):
+    organization = getattr(request.user.profile, "active_organization", None)
+    if organization is None:
+        return Response(
+            {"organization": ["Select an organization first."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    branches = Branch.objects.filter(
+        organization=organization,
+        is_active=True,
+    ).order_by("name")
+    serializer = BranchSerializer(branches, many=True)
+    return Response(serializer.data)

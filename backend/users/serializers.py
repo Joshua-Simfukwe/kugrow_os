@@ -4,12 +4,14 @@ from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework import serializers
 
-from .models import Organization, OrganizationMembership, UserProfile
+from .models import Branch, Organization, OrganizationMembership, UserProfile
 
 User = get_user_model()
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
+    branch_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Organization
         fields = [
@@ -18,8 +20,18 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "slug",
             "organization_type",
             "join_code",
+            "branch_count",
             "created_at",
         ]
+
+    def get_branch_count(self, obj):
+        return obj.branches.filter(is_active=True).count()
+
+
+class BranchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Branch
+        fields = ["id", "name", "code", "is_main", "is_active"]
 
 
 class OrganizationMembershipSerializer(serializers.ModelSerializer):
@@ -48,10 +60,11 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     active_organization = OrganizationSerializer(read_only=True)
+    active_branch = BranchSerializer(read_only=True)
 
     class Meta:
         model = UserProfile
-        fields = ["full_name", "active_organization"]
+        fields = ["full_name", "active_organization", "active_branch"]
 
 
 class OnboardingUserSerializer(serializers.ModelSerializer):
@@ -139,6 +152,7 @@ class OrganizationCreateSerializer(serializers.Serializer):
     organization_type = serializers.ChoiceField(
         choices=Organization.OrganizationType.choices
     )
+    main_branch_name = serializers.CharField(max_length=150, required=False)
 
     def validate_name(self, value):
         name = value.strip()
@@ -153,6 +167,14 @@ class OrganizationCreateSerializer(serializers.Serializer):
             organization_type=validated_data["organization_type"],
             created_by=user,
         )
+        branch_name = validated_data.get("main_branch_name", "Main Branch").strip() or "Main Branch"
+        main_branch = Branch.objects.create(
+            organization=organization,
+            name=branch_name,
+            code="MAIN",
+            is_main=True,
+            created_by=user,
+        )
         OrganizationMembership.objects.create(
             user=user,
             organization=organization,
@@ -164,7 +186,8 @@ class OrganizationCreateSerializer(serializers.Serializer):
             defaults={"full_name": user.get_full_name() or user.email},
         )
         profile.active_organization = organization
-        profile.save(update_fields=["active_organization", "updated_at"])
+        profile.active_branch = main_branch
+        profile.save(update_fields=["active_organization", "active_branch", "updated_at"])
 
         return organization
 
@@ -205,7 +228,8 @@ class OrganizationSelectionSerializer(serializers.Serializer):
             defaults={"full_name": user.get_full_name() or user.email},
         )
         profile.active_organization = organization
-        profile.save(update_fields=["active_organization", "updated_at"])
+        profile.active_branch = organization.main_branch
+        profile.save(update_fields=["active_organization", "active_branch", "updated_at"])
 
         return organization
 
@@ -238,7 +262,8 @@ class JoinOrganizationSerializer(serializers.Serializer):
             defaults={"full_name": user.get_full_name() or user.email},
         )
         profile.active_organization = organization
-        profile.save(update_fields=["active_organization", "updated_at"])
+        profile.active_branch = organization.main_branch
+        profile.save(update_fields=["active_organization", "active_branch", "updated_at"])
 
         return membership
 

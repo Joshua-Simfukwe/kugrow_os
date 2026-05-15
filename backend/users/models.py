@@ -73,6 +73,36 @@ class Organization(models.Model):
 
         super().save(*args, **kwargs)
 
+    @property
+    def main_branch(self):
+        return self.branches.filter(is_main=True, is_active=True).first()
+
+
+class Branch(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="branches",
+    )
+    name = models.CharField(max_length=150)
+    code = models.CharField(max_length=20)
+    is_main = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="created_branches",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        unique_together = ("organization", "code")
+
+    def __str__(self):
+        return f"{self.organization.name} - {self.name}"
+
 
 class UserProfile(models.Model):
     user = models.OneToOneField(
@@ -87,6 +117,13 @@ class UserProfile(models.Model):
         null=True,
         blank=True,
         related_name="active_members",
+    )
+    active_branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="active_users",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

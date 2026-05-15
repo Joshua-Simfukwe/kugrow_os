@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    branch_list,
     create_organization,
     join_organization,
     login,
@@ -20,4 +21,5 @@ urlpatterns = [
     path("organizations/create/", create_organization),
     path("organizations/join/", join_organization),
     path("organizations/select/", select_organization),
+    path("branches/", branch_list),
 ]
