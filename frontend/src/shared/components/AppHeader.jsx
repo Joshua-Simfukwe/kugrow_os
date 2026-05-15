@@ -1,7 +1,19 @@
+import { useNavigate } from "react-router-dom";
+
+import { useAuth } from "../../features/auth/context/useAuth";
+
 export default function AppHeader({
   title,
   subtitle,
 }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <header className="mb-6 flex items-center justify-between">
       <div>
@@ -24,17 +36,18 @@ export default function AppHeader({
             transition hover:bg-gray-50
           "
         >
-          Notifications
+          {user?.profile?.active_organization?.name ?? "Workspace"}
         </button>
 
         <button
+          onClick={handleLogout}
           className="
             rounded-xl bg-black
             px-4 py-2 text-sm text-white
             transition hover:opacity-90
           "
         >
-          Joshua
+          {user?.profile?.full_name?.split(" ")[0] ?? "Logout"}
         </button>
       </div>
     </header>

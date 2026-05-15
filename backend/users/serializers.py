@@ -12,7 +12,38 @@ User = get_user_model()
 class OrganizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
-        fields = ["id", "name", "slug", "organization_type", "created_at"]
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "organization_type",
+            "join_code",
+            "created_at",
+        ]
+
+
+class OrganizationMembershipSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(source="organization.id", read_only=True)
+    name = serializers.CharField(source="organization.name", read_only=True)
+    slug = serializers.CharField(source="organization.slug", read_only=True)
+    organization_type = serializers.CharField(
+        source="organization.organization_type",
+        read_only=True,
+    )
+    join_code = serializers.CharField(source="organization.join_code", read_only=True)
+    created_at = serializers.DateTimeField(source="organization.created_at", read_only=True)
+
+    class Meta:
+        model = OrganizationMembership
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "organization_type",
+            "join_code",
+            "created_at",
+            "role",
+        ]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -40,8 +71,7 @@ class OnboardingUserSerializer(serializers.ModelSerializer):
 
     def get_organizations(self, obj):
         memberships = obj.organization_memberships.select_related("organization")
-        organizations = [membership.organization for membership in memberships]
-        return OrganizationSerializer(organizations, many=True).data
+        return OrganizationMembershipSerializer(memberships, many=True).data
 
 
 class AuthResponseSerializer(serializers.Serializer):
@@ -178,6 +208,39 @@ class OrganizationSelectionSerializer(serializers.Serializer):
         profile.save(update_fields=["active_organization", "updated_at"])
 
         return organization
+
+
+class JoinOrganizationSerializer(serializers.Serializer):
+    join_code = serializers.CharField(max_length=12)
+
+    def validate_join_code(self, value):
+        return value.strip().upper()
+
+    def create(self, validated_data):
+        user = self.context["request"].user
+        join_code = validated_data["join_code"]
+
+        try:
+            organization = Organization.objects.get(join_code=join_code)
+        except Organization.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"join_code": "Organization not found for that join code."}
+            ) from exc
+
+        membership, _ = OrganizationMembership.objects.get_or_create(
+            user=user,
+            organization=organization,
+            defaults={"role": OrganizationMembership.Role.MEMBER},
+        )
+
+        profile, _ = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={"full_name": user.get_full_name() or user.email},
+        )
+        profile.active_organization = organization
+        profile.save(update_fields=["active_organization", "updated_at"])
+
+        return membership
 
 
 def build_auth_response(user):

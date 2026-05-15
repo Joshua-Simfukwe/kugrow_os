@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
+import { useAuth } from "../context/useAuth";
 import AuthLayout from "../../../shared/layouts/AuthLayout";
 import TextInput from "../../../shared/components/TextInput";
 import Button from "../../../shared/components/Button";
@@ -9,48 +10,88 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const { signup } = useAuth();
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+
+    try {
+      await signup({ full_name: fullName, email, password });
+      navigate("/create-organization", { replace: true });
+    } catch (requestError) {
+      const responseData = requestError.response?.data;
+      const firstError =
+        responseData?.password?.[0] ??
+        responseData?.email?.[0] ??
+        responseData?.full_name?.[0] ??
+        "We could not create your account right now.";
+      setError(firstError);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <AuthLayout
-      title="Create your account"
-      subtitle="Start using Kugrow OS today"
+      title="Create Account"
+      subtitle="Sign up to get started"
+      theme="signup"
+      containerClassName="max-w-xl"
     >
-      <form className="space-y-5">
+      <form className="space-y-5" onSubmit={handleSubmit}>
         <TextInput
-          label="Full Name"
-          placeholder="Enter your full name"
+          id="full-name"
+          name="fullName"
+          label="Full Name *"
+          placeholder="Full name"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
+          autoComplete="name"
         />
 
         <TextInput
-          label="Email"
+          id="signup-email"
+          name="email"
+          label="Email *"
           type="email"
-          placeholder="Enter your email"
+          placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
         />
 
         <TextInput
-          label="Password"
+          id="signup-password"
+          name="password"
+          label="Password *"
           type="password"
-          placeholder="Create a password"
+          placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+          helperText="Minimum 8 characters"
         />
 
+        {error && (
+          <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </p>
+        )}
+
         <Button type="submit">
-          Create Account
+          {isSubmitting ? "SIGNING UP..." : "SIGN UP"}
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-gray-600">
+      <p className="mt-8 text-center text-lg text-slate-700">
         Already have an account?{" "}
-        <Link
-          to="/login"
-          className="font-medium text-black hover:underline"
-        >
-          Login
+        <Link to="/login" className="font-semibold text-blue-600 hover:underline">
+          Sign in
         </Link>
       </p>
     </AuthLayout>

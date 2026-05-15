@@ -175,6 +175,8 @@ class OnboardingApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["name"], "Kugrow Enterprises")
+        self.assertEqual(response.data[0]["role"], OrganizationMembership.Role.MEMBER)
+        self.assertTrue(response.data[0]["join_code"])
 
     def test_select_organization_sets_active_organization(self):
         user = self.create_user_with_profile("owner@example.com", "Owner User")
@@ -257,3 +259,48 @@ class OnboardingApiTests(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
         me_response = self.client.get("/api/auth/me/")
         self.assertEqual(me_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_join_organization_creates_member_membership(self):
+        owner = self.create_user_with_profile("owner@example.com", "Owner User")
+        organization = Organization.objects.create(
+            name="Kugrow Store",
+            organization_type=Organization.OrganizationType.RETAIL,
+            created_by=owner,
+        )
+        OrganizationMembership.objects.create(
+            user=owner,
+            organization=organization,
+            role=OrganizationMembership.Role.OWNER,
+        )
+
+        member = self.create_user_with_profile("member@example.com", "Member User")
+        self.authenticate(member)
+
+        response = self.client.post(
+            "/api/auth/organizations/join/",
+            {
+                "join_code": organization.join_code,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        membership = OrganizationMembership.objects.get(user=member, organization=organization)
+        self.assertEqual(membership.role, OrganizationMembership.Role.MEMBER)
+        member.profile.refresh_from_db()
+        self.assertEqual(member.profile.active_organization, organization)
+
+    def test_join_organization_rejects_unknown_code(self):
+        member = self.create_user_with_profile("member@example.com", "Member User")
+        self.authenticate(member)
+
+        response = self.client.post(
+            "/api/auth/organizations/join/",
+            {
+                "join_code": "BADCODE1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("join_code", response.data)

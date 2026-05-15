@@ -1,3 +1,6 @@
+import secrets
+import string
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -26,6 +29,7 @@ class Organization(models.Model):
 
     name = models.CharField(max_length=150)
     slug = models.SlugField(max_length=170, unique=True)
+    join_code = models.CharField(max_length=12, unique=True, editable=False)
     organization_type = models.CharField(
         max_length=20,
         choices=OrganizationType.choices,
@@ -44,6 +48,11 @@ class Organization(models.Model):
     def __str__(self):
         return self.name
 
+    @staticmethod
+    def generate_join_code(length=8):
+        alphabet = string.ascii_uppercase + string.digits
+        return "".join(secrets.choice(alphabet) for _ in range(length))
+
     def save(self, *args, **kwargs):
         if not self.slug:
             base_slug = slugify(self.name)
@@ -55,6 +64,12 @@ class Organization(models.Model):
                 slug = f"{base_slug}-{suffix}"
 
             self.slug = slug
+
+        if not self.join_code:
+            join_code = self.generate_join_code()
+            while Organization.objects.filter(join_code=join_code).exclude(pk=self.pk).exists():
+                join_code = self.generate_join_code()
+            self.join_code = join_code
 
         super().save(*args, **kwargs)
 

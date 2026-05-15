@@ -9,9 +9,11 @@ from rest_framework.permissions import IsAuthenticated
 from .models import OrganizationMembership
 from .serializers import (
     AuthResponseSerializer,
+    JoinOrganizationSerializer,
     LoginSerializer,
     OnboardingUserSerializer,
     OrganizationCreateSerializer,
+    OrganizationMembershipSerializer,
     OrganizationSelectionSerializer,
     OrganizationSerializer,
     SignupSerializer,
@@ -64,8 +66,7 @@ def organization_list(request):
     memberships = OrganizationMembership.objects.filter(user=request.user).select_related(
         "organization"
     )
-    organizations = [membership.organization for membership in memberships]
-    serializer = OrganizationSerializer(organizations, many=True)
+    serializer = OrganizationMembershipSerializer(memberships, many=True)
     return Response(serializer.data)
 
 
@@ -97,5 +98,21 @@ def select_organization(request):
         organization = serializer.save()
         response_serializer = OrganizationSerializer(organization)
         return Response(response_serializer.data)
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def join_organization(request):
+    serializer = JoinOrganizationSerializer(
+        data=request.data,
+        context={"request": request},
+    )
+    if serializer.is_valid():
+        membership = serializer.save()
+        response_serializer = OrganizationMembershipSerializer(membership)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

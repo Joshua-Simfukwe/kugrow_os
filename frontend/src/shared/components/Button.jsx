@@ -4,6 +4,7 @@ export default function Button({
   fullWidth = true,
   onClick,
   disabled = false,
+  className = "",
 }) {
   return (
     <button
@@ -11,21 +12,24 @@ export default function Button({
       onClick={onClick}
       disabled={disabled}
       className={`
-        rounded-xl
+        rounded-2xl
         px-4
-        py-3
+        py-3.5
         text-sm
-        font-medium
-        transition
+        font-semibold
+        tracking-wide
+        transition-all
         active:scale-[0.99]
+        shadow-[0_10px_20px_rgba(37,99,235,0.2)]
 
         ${
           disabled
-            ? "cursor-not-allowed bg-gray-300 text-gray-500"
-            : "bg-black text-white hover:opacity-90"
+            ? "cursor-not-allowed bg-slate-300 text-slate-500 shadow-none"
+            : "bg-blue-600 text-white hover:bg-blue-700"
         }
 
         ${fullWidth ? "w-full" : ""}
+        ${className}
       `}
     >
       {children}

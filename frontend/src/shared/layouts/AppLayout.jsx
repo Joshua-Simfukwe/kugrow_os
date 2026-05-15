@@ -1,10 +1,12 @@
 import { useState } from "react";
 
+import { useAuth } from "../../features/auth/context/useAuth";
 import AppSidebar from "../components/AppSidebar";
 
 export default function AppLayout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] =
     useState(false);
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -14,6 +16,9 @@ export default function AppLayout({ children }) {
           <h1 className="text-lg font-bold text-gray-900">
             Kugrow OS
           </h1>
+          <p className="text-xs text-gray-500">
+            {user?.profile?.active_organization?.name ?? "Workspace"}
+          </p>
         </div>
 
         <button

@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "../../features/auth/context/useAuth";
 import { navigationItems } from "../../config/navigation";
 
 export default function AppSidebar({
@@ -6,6 +7,7 @@ export default function AppSidebar({
   setMobileMenuOpen,
 }) {
   const location = useLocation();
+  const { user } = useAuth();
 
   return (
     <aside
@@ -29,7 +31,7 @@ export default function AppSidebar({
         </h1>
 
         <p className="mt-1 text-sm text-gray-500">
-          Business Workspace
+          {user?.profile?.active_organization?.name ?? "Business Workspace"}
         </p>
       </div>
 
