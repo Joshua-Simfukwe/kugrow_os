@@ -8,10 +8,14 @@ import JoinOrganizationPage from "../features/auth/pages/JoinOrganizationPage";
 
 import Dashboard from "../pages/Dashboard";
 import AppLayout from "../shared/layouts/AppLayout";
+import Inventory from "../pages/Inventory";
 import POS from "../pages/POS";
+import RetailHome from "../pages/RetailHome";
+import Settings from "../pages/Settings";
 import {
   AuthenticatedRoute,
   GuestOnlyRoute,
+  ModuleRoute,
   RootRedirect,
   WorkspaceRoute,
 } from "./RouteGuards";
@@ -39,22 +43,56 @@ export default function AppRouter() {
       </Route>
 
       <Route element={<WorkspaceRoute />}>
-        <Route
-          path="/pos"
-          element={
-            <AppLayout>
-              <POS />
-            </AppLayout>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
-          }
-        />
+        <Route element={<ModuleRoute moduleKey="home" />}>
+          <Route
+            path="/home"
+            element={
+              <AppLayout>
+                <RetailHome />
+              </AppLayout>
+            }
+          />
+        </Route>
+        <Route element={<ModuleRoute moduleKey="dashboard" />}>
+          <Route
+            path="/dashboard"
+            element={
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
+            }
+          />
+        </Route>
+        <Route element={<ModuleRoute moduleKey="pos" />}>
+          <Route
+            path="/pos"
+            element={
+              <AppLayout>
+                <POS />
+              </AppLayout>
+            }
+          />
+        </Route>
+        <Route element={<ModuleRoute moduleKey="inventory" />}>
+          <Route
+            path="/inventory"
+            element={
+              <AppLayout>
+                <Inventory />
+              </AppLayout>
+            }
+          />
+        </Route>
+        <Route element={<ModuleRoute moduleKey="settings" />}>
+          <Route
+            path="/settings"
+            element={
+              <AppLayout>
+                <Settings />
+              </AppLayout>
+            }
+          />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

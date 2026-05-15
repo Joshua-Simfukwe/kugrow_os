@@ -1,7 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 
 import { useAuth } from "../features/auth/context/useAuth";
-import { getHomeRoute } from "../features/auth/utils/authRoutes";
+import { getHomeRoute, hasModuleAccess } from "../features/auth/utils/authRoutes";
 
 function PageLoader() {
   return (
@@ -75,4 +75,22 @@ export function RootRedirect() {
   }
 
   return <Navigate to={getHomeRoute(user)} replace />;
+}
+
+export function ModuleRoute({ moduleKey }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!hasModuleAccess(user, moduleKey)) {
+    return <Navigate to={getHomeRoute(user)} replace />;
+  }
+
+  return <Outlet />;
 }

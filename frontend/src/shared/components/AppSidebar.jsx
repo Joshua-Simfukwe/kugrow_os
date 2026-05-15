@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../features/auth/context/useAuth";
-import { navigationItems } from "../../config/navigation";
+import { getNavigationItems } from "../../config/navigation";
 
 export default function AppSidebar({
   mobileMenuOpen,
@@ -8,6 +8,8 @@ export default function AppSidebar({
 }) {
   const location = useLocation();
   const { user } = useAuth();
+  const navigationItems = getNavigationItems(user);
+  const roleLabel = user?.active_membership?.role ?? "member";
 
   return (
     <aside
@@ -26,12 +28,16 @@ export default function AppSidebar({
       `}
     >
       <div className="border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Kugrow OS
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-600">
+          Powered by Kugrow OS
+        </p>
+
+        <h1 className="mt-3 text-2xl font-bold text-gray-900">
+          {user?.profile?.active_organization?.name ?? "Business Workspace"}
         </h1>
 
         <p className="mt-1 text-sm text-gray-500">
-          {user?.profile?.active_organization?.name ?? "Business Workspace"}
+          {roleLabel} access
         </p>
       </div>
 
@@ -53,7 +59,7 @@ export default function AppSidebar({
 
                 ${
                   isActive
-                    ? "bg-black text-white"
+                    ? "bg-blue-600 text-white"
                     : "text-gray-700 hover:bg-gray-100"
                 }
               `}

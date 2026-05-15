@@ -32,7 +32,7 @@ export default function CreateOrganizationPage() {
         name: organizationName,
         organization_type: organizationType,
       });
-      navigate("/organizations", { replace: true });
+      navigate("/home", { replace: true });
     } catch (requestError) {
       setError(
         requestError.response?.data?.name?.[0] ??

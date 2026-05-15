@@ -13,12 +13,12 @@ export default function AppLayout({ children }) {
       {/* Mobile Topbar */}
       <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 md:hidden">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">
-            Kugrow OS
-          </h1>
-          <p className="text-xs text-gray-500">
-            {user?.profile?.active_organization?.name ?? "Workspace"}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-600">
+            Powered by Kugrow OS
           </p>
+          <h1 className="text-lg font-bold text-gray-900">
+            {user?.profile?.active_organization?.name ?? "Workspace"}
+          </h1>
         </div>
 
         <button
@@ -48,7 +48,7 @@ export default function AppLayout({ children }) {
         )}
 
         {/* Main Content */}
-        <main className="min-h-screen flex-1 p-6">
+        <main className="min-h-screen flex-1 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)] p-6">
           {children}
         </main>
       </div>

@@ -1,3 +1,4 @@
+from common.access import require_module_access
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view
@@ -15,6 +16,7 @@ from .serializers import SaleSerializer
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def create_sale(request):
+    require_module_access(request, "pos")
     if request.method == "GET":
         organization = get_active_organization(request)
         query = request.query_params.get("q", "").strip()

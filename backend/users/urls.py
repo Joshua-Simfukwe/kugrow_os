@@ -8,6 +8,8 @@ from .views import (
     logout,
     me,
     organization_list,
+    organization_team,
+    organization_team_member_detail,
     select_organization,
     signup,
 )
@@ -22,4 +24,6 @@ urlpatterns = [
     path("organizations/join/", join_organization),
     path("organizations/select/", select_organization),
     path("branches/", branch_list),
+    path("team/", organization_team),
+    path("team/<int:membership_id>/", organization_team_member_detail),
 ]

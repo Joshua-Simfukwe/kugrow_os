@@ -1,3 +1,5 @@
+from common.access import require_module_access, require_team_management
+from common.organization import get_active_organization
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view
@@ -14,6 +16,9 @@ from .serializers import (
     LoginSerializer,
     OnboardingUserSerializer,
     OrganizationCreateSerializer,
+    OrganizationMemberCreateSerializer,
+    OrganizationMemberSerializer,
+    OrganizationMemberUpdateSerializer,
     OrganizationMembershipSerializer,
     OrganizationSelectionSerializer,
     OrganizationSerializer,
@@ -123,12 +128,8 @@ def join_organization(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def branch_list(request):
-    organization = getattr(request.user.profile, "active_organization", None)
-    if organization is None:
-        return Response(
-            {"organization": ["Select an organization first."]},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    require_module_access(request, "home")
+    organization = get_active_organization(request)
 
     branches = Branch.objects.filter(
         organization=organization,
@@ -136,3 +137,58 @@ def branch_list(request):
     ).order_by("name")
     serializer = BranchSerializer(branches, many=True)
     return Response(serializer.data)
+
+
+@api_view(["GET", "POST"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def organization_team(request):
+    membership = require_team_management(request)
+    organization = membership.organization
+
+    if request.method == "GET":
+        members = OrganizationMembership.objects.filter(
+            organization=organization
+        ).select_related("user__profile", "organization")
+        serializer = OrganizationMemberSerializer(members, many=True)
+        return Response(serializer.data)
+
+    serializer = OrganizationMemberCreateSerializer(
+        data=request.data,
+        context={"request": request, "organization": organization},
+    )
+    if serializer.is_valid():
+        member = serializer.save()
+        return Response(
+            OrganizationMemberSerializer(member).data,
+            status=status.HTTP_201_CREATED,
+        )
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["PATCH"])
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+def organization_team_member_detail(request, membership_id):
+    acting_membership = require_team_management(request)
+    organization = acting_membership.organization
+
+    try:
+        membership = OrganizationMembership.objects.select_related(
+            "user__profile",
+            "organization",
+        ).get(pk=membership_id, organization=organization)
+    except OrganizationMembership.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    if membership.role == OrganizationMembership.Role.OWNER:
+        return Response(
+            {"detail": "Owner access cannot be modified from this screen."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    serializer = OrganizationMemberUpdateSerializer(data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.update(membership, serializer.validated_data)
+        return Response(OrganizationMemberSerializer(membership).data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

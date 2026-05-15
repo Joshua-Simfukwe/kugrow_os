@@ -20,7 +20,7 @@ export default function JoinOrganizationPage() {
 
     try {
       await joinOrganization(joinCode);
-      navigate("/dashboard", { replace: true });
+      navigate("/home", { replace: true });
     } catch (requestError) {
       setError(
         requestError.response?.data?.join_code?.[0] ??

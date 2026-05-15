@@ -1,3 +1,4 @@
+from common.access import require_module_access
 from django.db.models import Sum
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
@@ -21,6 +22,7 @@ from .serializers import (
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def expense_category_list(request):
+    require_module_access(request, "settings")
     organization = get_active_organization(request)
     if request.method == "GET":
         categories = ExpenseCategory.objects.filter(organization=organization, is_active=True)
@@ -37,6 +39,7 @@ def expense_category_list(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def expense_list(request):
+    require_module_access(request, "settings")
     organization = get_active_organization(request)
     if request.method == "GET":
         expenses = Expense.objects.filter(organization=organization).select_related("category", "branch")
@@ -53,6 +56,7 @@ def expense_list(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def dashboard_summary(request):
+    require_module_access(request, "dashboard")
     organization = get_active_organization(request)
     payload = build_dashboard_summary(organization)
     serializer = DashboardSummarySerializer(payload)

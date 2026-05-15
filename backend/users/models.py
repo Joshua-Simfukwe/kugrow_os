@@ -133,6 +133,21 @@ class UserProfile(models.Model):
 
 
 class OrganizationMembership(models.Model):
+    MODULE_HOME = "home"
+    MODULE_DASHBOARD = "dashboard"
+    MODULE_POS = "pos"
+    MODULE_INVENTORY = "inventory"
+    MODULE_SETTINGS = "settings"
+    MODULE_USERS = "users"
+    AVAILABLE_MODULES = [
+        MODULE_HOME,
+        MODULE_DASHBOARD,
+        MODULE_POS,
+        MODULE_INVENTORY,
+        MODULE_SETTINGS,
+        MODULE_USERS,
+    ]
+
     class Role(models.TextChoices):
         OWNER = "owner", "Owner"
         ADMIN = "admin", "Admin"
@@ -153,6 +168,7 @@ class OrganizationMembership(models.Model):
         choices=Role.choices,
         default=Role.MEMBER,
     )
+    module_access = models.JSONField(default=list, blank=True)
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -161,3 +177,36 @@ class OrganizationMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.email} -> {self.organization.name}"
+
+    @classmethod
+    def default_module_access_for_role(cls, role):
+        if role == cls.Role.OWNER:
+            return list(cls.AVAILABLE_MODULES)
+        if role == cls.Role.ADMIN:
+            return [
+                cls.MODULE_HOME,
+                cls.MODULE_DASHBOARD,
+                cls.MODULE_POS,
+                cls.MODULE_INVENTORY,
+                cls.MODULE_SETTINGS,
+                cls.MODULE_USERS,
+            ]
+        return [
+            cls.MODULE_HOME,
+            cls.MODULE_DASHBOARD,
+            cls.MODULE_POS,
+        ]
+
+    def get_resolved_module_access(self):
+        if self.role == self.Role.OWNER:
+            return list(self.AVAILABLE_MODULES)
+
+        configured_modules = self.module_access or self.default_module_access_for_role(
+            self.role
+        )
+        valid_modules = [
+            module_key
+            for module_key in configured_modules
+            if module_key in self.AVAILABLE_MODULES
+        ]
+        return valid_modules or self.default_module_access_for_role(self.role)

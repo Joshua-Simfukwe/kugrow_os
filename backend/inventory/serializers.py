@@ -1,10 +1,11 @@
 from rest_framework import serializers
 from common.organization import get_active_branch
-from .models import BranchStock, Category, Product, Supplier
+from .models import BranchStock, Category, InventoryTransaction, Product, Supplier
 
 class ProductSerializer(serializers.ModelSerializer):
     branch_stock = serializers.SerializerMethodField()
     category_name = serializers.CharField(source="category.name", read_only=True)
+    supplier_name = serializers.CharField(source="supplier.name", read_only=True)
 
     class Meta:
         model = Product
@@ -14,6 +15,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "sku",
             "category",
             "category_name",
+            "supplier_name",
             "selling_price",
             "cost_price",
             "current_stock",
@@ -35,6 +37,67 @@ class ProductSerializer(serializers.ModelSerializer):
         branch = get_active_branch(request, organization)
         stock = obj.branch_stocks.filter(branch=branch).values_list("current_stock", flat=True).first()
         return stock if stock is not None else 0
+
+
+class InventoryTransactionSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+
+    class Meta:
+        model = InventoryTransaction
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "branch_name",
+            "quantity",
+            "transaction_type",
+            "reference",
+            "note",
+            "created_at",
+        ]
+
+
+class InventoryAdjustmentSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    transaction_type = serializers.ChoiceField(
+        choices=["IN", "ADJUST", "DAMAGED", "MISSING"]
+    )
+    quantity = serializers.IntegerField(min_value=0)
+    reference = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    note = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs):
+        organization = self.context["organization"]
+        try:
+            product = Product.objects.get(
+                pk=attrs["product_id"],
+                organization=organization,
+                is_active=True,
+            )
+        except Product.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"product_id": "Product not found in the active organization."}
+            ) from exc
+
+        transaction_type = attrs["transaction_type"]
+        quantity = attrs["quantity"]
+        if transaction_type == "IN" and quantity <= 0:
+            raise serializers.ValidationError({"quantity": "Add stock quantity must be greater than zero."})
+        if transaction_type in ["DAMAGED", "MISSING"] and quantity <= 0:
+            raise serializers.ValidationError({"quantity": "This adjustment quantity must be greater than zero."})
+
+        attrs["product"] = product
+        return attrs
+
+    def create(self, validated_data):
+        branch = self.context["branch"]
+        organization = self.context["organization"]
+        validated_data["product"] = validated_data.pop("product")
+        validated_data["branch"] = branch
+        validated_data["organization"] = organization
+        validated_data.pop("product_id", None)
+        return InventoryTransaction.objects.create(**validated_data)
 
 
 class ProductWriteSerializer(serializers.Serializer):

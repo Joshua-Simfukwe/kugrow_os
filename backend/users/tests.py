@@ -2,12 +2,32 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Organization, OrganizationMembership, UserProfile
+from .models import Branch, Organization, OrganizationMembership, UserProfile
 
 User = get_user_model()
 
 
 class OnboardingApiTests(APITestCase):
+    def create_organization_with_owner(self, user, name="Test Organization", organization_type=Organization.OrganizationType.RETAIL):
+        organization = Organization.objects.create(
+            name=name,
+            organization_type=organization_type,
+            created_by=user,
+        )
+        Branch.objects.create(
+            organization=organization,
+            name="Main Branch",
+            code=f"MAIN-{organization.id}",
+            is_main=True,
+            created_by=user,
+        )
+        OrganizationMembership.objects.create(
+            user=user,
+            organization=organization,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        return organization
+
     def create_user_with_profile(self, email, full_name="Test User"):
         user = User.objects.create_user(
             email=email,
@@ -73,16 +93,7 @@ class OnboardingApiTests(APITestCase):
 
     def test_login_returns_user_and_organizations(self):
         user = self.create_user_with_profile("jane@example.com", "Jane Doe")
-        organization = Organization.objects.create(
-            name="Kugrow Enterprises",
-            organization_type=Organization.OrganizationType.RETAIL,
-            created_by=user,
-        )
-        OrganizationMembership.objects.create(
-            user=user,
-            organization=organization,
-            role=OrganizationMembership.Role.OWNER,
-        )
+        organization = self.create_organization_with_owner(user, name="Kugrow Enterprises")
 
         response = self.client.post(
             "/api/auth/login/",
@@ -162,12 +173,7 @@ class OnboardingApiTests(APITestCase):
 
     def test_list_organizations_returns_user_memberships(self):
         user = self.create_user_with_profile("owner@example.com", "Owner User")
-        organization = Organization.objects.create(
-            name="Kugrow Enterprises",
-            organization_type=Organization.OrganizationType.RETAIL,
-            created_by=user,
-        )
-        OrganizationMembership.objects.create(user=user, organization=organization)
+        organization = self.create_organization_with_owner(user, name="Kugrow Enterprises")
         self.authenticate(user)
 
         response = self.client.get("/api/auth/organizations/")
@@ -175,24 +181,18 @@ class OnboardingApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["name"], "Kugrow Enterprises")
-        self.assertEqual(response.data[0]["role"], OrganizationMembership.Role.MEMBER)
+        self.assertEqual(response.data[0]["role"], OrganizationMembership.Role.OWNER)
         self.assertTrue(response.data[0]["join_code"])
 
     def test_select_organization_sets_active_organization(self):
         user = self.create_user_with_profile("owner@example.com", "Owner User")
         self.authenticate(user)
-        first_organization = Organization.objects.create(
-            name="Kugrow Enterprises",
-            organization_type=Organization.OrganizationType.RETAIL,
-            created_by=user,
-        )
-        second_organization = Organization.objects.create(
+        first_organization = self.create_organization_with_owner(user, name="Kugrow Enterprises")
+        second_organization = self.create_organization_with_owner(
+            user,
             name="Future Academy",
             organization_type=Organization.OrganizationType.EDUCATION,
-            created_by=user,
         )
-        OrganizationMembership.objects.create(user=user, organization=first_organization)
-        OrganizationMembership.objects.create(user=user, organization=second_organization)
 
         response = self.client.post(
             "/api/auth/organizations/select/",
@@ -209,12 +209,7 @@ class OnboardingApiTests(APITestCase):
     def test_select_organization_rejects_user_without_membership(self):
         user = self.create_user_with_profile("owner@example.com", "Owner User")
         outsider = self.create_user_with_profile("outsider@example.com", "Outsider")
-        organization = Organization.objects.create(
-            name="Kugrow Enterprises",
-            organization_type=Organization.OrganizationType.RETAIL,
-            created_by=user,
-        )
-        OrganizationMembership.objects.create(user=user, organization=organization)
+        organization = self.create_organization_with_owner(user, name="Kugrow Enterprises")
         self.authenticate(outsider)
 
         response = self.client.post(
@@ -262,16 +257,7 @@ class OnboardingApiTests(APITestCase):
 
     def test_join_organization_creates_member_membership(self):
         owner = self.create_user_with_profile("owner@example.com", "Owner User")
-        organization = Organization.objects.create(
-            name="Kugrow Store",
-            organization_type=Organization.OrganizationType.RETAIL,
-            created_by=owner,
-        )
-        OrganizationMembership.objects.create(
-            user=owner,
-            organization=organization,
-            role=OrganizationMembership.Role.OWNER,
-        )
+        organization = self.create_organization_with_owner(owner, name="Kugrow Store")
 
         member = self.create_user_with_profile("member@example.com", "Member User")
         self.authenticate(member)
@@ -304,3 +290,63 @@ class OnboardingApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("join_code", response.data)
+
+    def test_me_returns_active_membership_details(self):
+        owner = self.create_user_with_profile("owner@example.com", "Owner User")
+        organization = self.create_organization_with_owner(owner, name="Kugrow Retail")
+        owner.profile.active_organization = organization
+        owner.profile.active_branch = organization.main_branch
+        owner.profile.save(update_fields=["active_organization", "active_branch", "updated_at"])
+        self.authenticate(owner)
+
+        response = self.client.get("/api/auth/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["active_membership"]["organization_name"], "Kugrow Retail")
+        self.assertIn("inventory", response.data["active_membership"]["module_access"])
+
+    def test_team_endpoint_creates_member_with_module_access(self):
+        owner = self.create_user_with_profile("owner@example.com", "Owner User")
+        organization = self.create_organization_with_owner(owner, name="Kugrow Store")
+        owner.profile.active_organization = organization
+        owner.profile.active_branch = organization.main_branch
+        owner.profile.save(update_fields=["active_organization", "active_branch", "updated_at"])
+        self.authenticate(owner)
+
+        response = self.client.post(
+            "/api/auth/team/",
+            {
+                "full_name": "Cashier User",
+                "email": "cashier@example.com",
+                "password": "strongpass123",
+                "role": "member",
+                "module_access": ["home", "pos"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        membership = OrganizationMembership.objects.get(
+            user__email="cashier@example.com",
+            organization=organization,
+        )
+        self.assertEqual(membership.role, OrganizationMembership.Role.MEMBER)
+        self.assertEqual(membership.module_access, ["home", "pos"])
+
+    def test_team_endpoint_rejects_non_admin_membership(self):
+        owner = self.create_user_with_profile("owner@example.com", "Owner User")
+        organization = self.create_organization_with_owner(owner, name="Kugrow Store")
+        member = self.create_user_with_profile("member@example.com", "Member User")
+        OrganizationMembership.objects.create(
+            user=member,
+            organization=organization,
+            role=OrganizationMembership.Role.MEMBER,
+        )
+        member.profile.active_organization = organization
+        member.profile.active_branch = organization.main_branch
+        member.profile.save(update_fields=["active_organization", "active_branch", "updated_at"])
+        self.authenticate(member)
+
+        response = self.client.get("/api/auth/team/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

@@ -13,7 +13,7 @@ export default function OrganizationSelectPage() {
 
   async function handleSelectOrganization(organizationId) {
     await selectOrganization(organizationId);
-    navigate("/dashboard", { replace: true });
+    navigate("/home", { replace: true });
   }
 
   return (
