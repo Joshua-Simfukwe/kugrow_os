@@ -34,6 +34,16 @@ def require_module_access(request, module_key):
     return membership
 
 
+def require_any_module_access(request, module_keys):
+    membership = get_active_membership(request.user)
+    allowed_modules = set(get_allowed_modules(membership))
+    if not allowed_modules.intersection(module_keys):
+        raise PermissionDenied(
+            "You do not have access to this workspace module in the active organization."
+        )
+    return membership
+
+
 def require_team_management(request):
     membership = get_active_membership(request.user)
     if membership.role == OrganizationMembership.Role.OWNER:

@@ -83,3 +83,16 @@ class FinanceApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["organization_type"], "retail")
         self.assertEqual(len(response.data["headline_metrics"]), 4)
+
+    def test_dashboard_summary_allows_home_only_access(self):
+        membership = OrganizationMembership.objects.get(
+            user=self.user,
+            organization=self.organization,
+        )
+        membership.role = OrganizationMembership.Role.MEMBER
+        membership.module_access = ["home", "pos"]
+        membership.save(update_fields=["role", "module_access"])
+
+        response = self.client.get("/api/finance/dashboard/summary/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

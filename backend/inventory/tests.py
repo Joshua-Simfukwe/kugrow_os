@@ -83,3 +83,17 @@ class InventoryApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["product_name"], "Breakfast Meal")
+
+    def test_product_list_allows_pos_only_member_access(self):
+        membership = OrganizationMembership.objects.get(
+            user=self.user,
+            organization=self.organization,
+        )
+        membership.role = OrganizationMembership.Role.MEMBER
+        membership.module_access = ["home", "pos"]
+        membership.save(update_fields=["role", "module_access"])
+
+        response = self.client.get("/api/inventory/products/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)

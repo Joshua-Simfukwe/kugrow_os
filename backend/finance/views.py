@@ -1,4 +1,4 @@
-from common.access import require_module_access
+from common.access import require_any_module_access, require_module_access
 from django.db.models import Sum
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
@@ -56,7 +56,7 @@ def expense_list(request):
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def dashboard_summary(request):
-    require_module_access(request, "dashboard")
+    require_any_module_access(request, {"home", "dashboard"})
     organization = get_active_organization(request)
     payload = build_dashboard_summary(organization)
     serializer = DashboardSummarySerializer(payload)

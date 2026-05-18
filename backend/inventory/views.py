@@ -1,4 +1,4 @@
-from common.access import require_module_access
+from common.access import require_any_module_access, require_module_access
 from common.organization import get_active_branch, get_active_organization
 from rest_framework import status
 from rest_framework.authentication import TokenAuthentication
@@ -19,7 +19,10 @@ from .serializers import (
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 def product_list(request):
-    require_module_access(request, "inventory")
+    if request.method == "GET":
+        require_any_module_access(request, {"inventory", "pos"})
+    else:
+        require_module_access(request, "inventory")
     organization = get_active_organization(request)
     branch = get_active_branch(request, organization)
 

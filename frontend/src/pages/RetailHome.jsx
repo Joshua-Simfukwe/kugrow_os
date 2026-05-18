@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { useAuth } from "../features/auth/context/useAuth";
+import { hasModuleAccess } from "../features/auth/utils/authRoutes";
 import AppHeader from "../shared/components/AppHeader";
 import { apiClient } from "../lib/api";
 
@@ -24,6 +26,7 @@ function SectionCard({ title, children }) {
 }
 
 export default function RetailHome() {
+  const { user } = useAuth();
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
@@ -62,6 +65,13 @@ export default function RetailHome() {
     () => summary?.tables?.find((table) => table.title === "Business Position")?.rows ?? [],
     [summary],
   );
+  const quickActions = useMemo(
+    () =>
+      (summary?.quick_actions ?? []).filter((action) =>
+        hasModuleAccess(user, action.module),
+      ),
+    [summary, user],
+  );
 
   return (
     <div className="space-y-6">
@@ -81,7 +91,7 @@ export default function RetailHome() {
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-3">
-            {(summary?.quick_actions ?? []).map((action) => (
+            {quickActions.map((action) => (
               <Link
                 key={action.route}
                 to={action.route}
