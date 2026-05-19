@@ -1,16 +1,25 @@
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework import serializers
 
-from .models import Branch, Organization, OrganizationMembership, UserProfile
+from .models import (
+    Branch,
+    Organization,
+    OrganizationMembership,
+    PhoneVerificationChallenge,
+    UserProfile,
+)
 
 User = get_user_model()
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
     branch_count = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -21,11 +30,15 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "organization_type",
             "join_code",
             "branch_count",
+            "member_count",
             "created_at",
         ]
 
     def get_branch_count(self, obj):
         return obj.branches.filter(is_active=True).count()
+
+    def get_member_count(self, obj):
+        return obj.memberships.count()
 
 
 class BranchSerializer(serializers.ModelSerializer):
@@ -44,6 +57,7 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
     )
     join_code = serializers.CharField(source="organization.join_code", read_only=True)
     created_at = serializers.DateTimeField(source="organization.created_at", read_only=True)
+    member_count = serializers.SerializerMethodField()
 
     class Meta:
         model = OrganizationMembership
@@ -54,6 +68,7 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
             "organization_type",
             "join_code",
             "created_at",
+            "member_count",
             "role",
             "module_access",
         ]
@@ -62,6 +77,9 @@ class OrganizationMembershipSerializer(serializers.ModelSerializer):
         representation = super().to_representation(instance)
         representation["module_access"] = instance.get_resolved_module_access()
         return representation
+
+    def get_member_count(self, obj):
+        return obj.organization.memberships.count()
 
 
 class ActiveMembershipSerializer(serializers.ModelSerializer):
@@ -91,10 +109,21 @@ class ActiveMembershipSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     active_organization = OrganizationSerializer(read_only=True)
     active_branch = BranchSerializer(read_only=True)
+    masked_phone_number = serializers.SerializerMethodField()
 
     class Meta:
         model = UserProfile
-        fields = ["full_name", "active_organization", "active_branch"]
+        fields = [
+            "full_name",
+            "phone_number",
+            "phone_verified_at",
+            "masked_phone_number",
+            "active_organization",
+            "active_branch",
+        ]
+
+    def get_masked_phone_number(self, obj):
+        return obj.get_masked_phone_number()
 
 
 class OnboardingUserSerializer(serializers.ModelSerializer):
@@ -135,6 +164,15 @@ class OnboardingUserSerializer(serializers.ModelSerializer):
 class AuthResponseSerializer(serializers.Serializer):
     token = serializers.CharField()
     user = OnboardingUserSerializer()
+
+
+class PhoneVerificationChallengeSerializer(serializers.Serializer):
+    challenge_id = serializers.UUIDField()
+    full_name = serializers.CharField()
+    masked_phone_number = serializers.CharField(allow_blank=True)
+    expires_in_seconds = serializers.IntegerField()
+    can_use_another_phone_number = serializers.BooleanField(default=True)
+    debug_code = serializers.CharField(required=False)
 
 
 class SignupSerializer(serializers.Serializer):
@@ -190,6 +228,94 @@ class LoginSerializer(serializers.Serializer):
 
         attrs["user"] = user
         return attrs
+
+
+class VerifyPhoneCodeSerializer(serializers.Serializer):
+    challenge_id = serializers.UUIDField()
+    code = serializers.CharField(min_length=6, max_length=6)
+
+    default_error_messages = {
+        "invalid_code": "That code is not valid. Please try again.",
+        "expired": "That code has expired. Request a new one and try again.",
+        "attempts_exceeded": "Too many incorrect attempts. Request a new code to continue.",
+        "not_found": "We could not find that verification request. Start again from login.",
+    }
+
+    def validate_code(self, value):
+        normalized_value = value.strip()
+        if not normalized_value.isdigit():
+            raise serializers.ValidationError("Enter the 6-digit verification code.")
+        return normalized_value
+
+    def validate(self, attrs):
+        challenge_id = attrs["challenge_id"]
+        try:
+            challenge = PhoneVerificationChallenge.objects.select_related("user", "user__profile").get(
+                pk=challenge_id
+            )
+        except PhoneVerificationChallenge.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"challenge_id": self.error_messages["not_found"]}
+            ) from exc
+
+        if challenge.verified_at is not None:
+            raise serializers.ValidationError(
+                {"challenge_id": self.error_messages["not_found"]}
+            )
+        if challenge.is_expired:
+            raise serializers.ValidationError({"code": self.error_messages["expired"]})
+        if challenge.attempt_count >= PhoneVerificationChallenge.MAX_ATTEMPTS:
+            raise serializers.ValidationError(
+                {"code": self.error_messages["attempts_exceeded"]}
+            )
+
+        attrs["challenge"] = challenge
+        return attrs
+
+    def create(self, validated_data):
+        challenge = validated_data["challenge"]
+        if not challenge.verify_code(validated_data["code"]):
+            raise serializers.ValidationError({"code": self.error_messages["invalid_code"]})
+
+        profile = challenge.user.profile
+        if challenge.phone_number and profile.phone_number != challenge.phone_number:
+            profile.phone_number = challenge.phone_number
+        profile.phone_verified_at = timezone.now()
+        profile.save(update_fields=["phone_number", "phone_verified_at", "updated_at"])
+        return challenge.user
+
+
+class ResendPhoneCodeSerializer(serializers.Serializer):
+    challenge_id = serializers.UUIDField()
+
+    default_error_messages = {
+        "not_found": "We could not find that verification request. Start again from login.",
+    }
+
+    def validate(self, attrs):
+        challenge_id = attrs["challenge_id"]
+        try:
+            challenge = PhoneVerificationChallenge.objects.select_related("user", "user__profile").get(
+                pk=challenge_id
+            )
+        except PhoneVerificationChallenge.DoesNotExist as exc:
+            raise serializers.ValidationError(
+                {"challenge_id": self.error_messages["not_found"]}
+            ) from exc
+
+        if challenge.verified_at is not None:
+            raise serializers.ValidationError(
+                {"challenge_id": self.error_messages["not_found"]}
+            )
+
+        attrs["challenge"] = challenge
+        return attrs
+
+    def save(self, **kwargs):
+        challenge = self.validated_data["challenge"]
+        challenge.refresh_code()
+        challenge.save(update_fields=["code_hash", "expires_at", "last_sent_at", "resend_count", "verified_at", "updated_at"])
+        return challenge
 
 
 class OrganizationCreateSerializer(serializers.Serializer):
@@ -455,3 +581,16 @@ def build_auth_response(user):
         "token": token.key,
         "user": user,
     }
+
+
+def build_phone_verification_response(challenge):
+    payload = {
+        "challenge_id": challenge.id,
+        "full_name": challenge.user.profile.full_name,
+        "masked_phone_number": challenge.user.profile.get_masked_phone_number(),
+        "expires_in_seconds": challenge.expires_in_seconds,
+        "can_use_another_phone_number": True,
+    }
+    if settings.DEBUG:
+        payload["debug_code"] = getattr(challenge, "_plaintext_code", "")
+    return payload

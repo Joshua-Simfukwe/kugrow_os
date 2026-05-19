@@ -14,10 +14,14 @@ function PageLoader() {
 }
 
 export function GuestOnlyRoute() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, isPhoneVerificationPending, user } = useAuth();
 
   if (isLoading) {
     return <PageLoader />;
+  }
+
+  if (isPhoneVerificationPending) {
+    return <Navigate to="/verify-phone" replace />;
   }
 
   if (isAuthenticated) {
@@ -64,10 +68,14 @@ export function WorkspaceRoute() {
 }
 
 export function RootRedirect() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, isPhoneVerificationPending, user } = useAuth();
 
   if (isLoading) {
     return <PageLoader />;
+  }
+
+  if (isPhoneVerificationPending) {
+    return <Navigate to="/verify-phone" replace />;
   }
 
   if (!isAuthenticated) {
@@ -90,6 +98,24 @@ export function ModuleRoute({ moduleKey }) {
 
   if (!hasModuleAccess(user, moduleKey)) {
     return <Navigate to={getHomeRoute(user)} replace />;
+  }
+
+  return <Outlet />;
+}
+
+export function PhoneVerificationRoute() {
+  const { isAuthenticated, isLoading, isPhoneVerificationPending, user } = useAuth();
+
+  if (isLoading) {
+    return <PageLoader />;
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={getHomeRoute(user)} replace />;
+  }
+
+  if (!isPhoneVerificationPending) {
+    return <Navigate to="/login" replace />;
   }
 
   return <Outlet />;

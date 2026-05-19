@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/useAuth";
+import { getWorkspaceRoute } from "../utils/authRoutes";
 import AuthLayout from "../../../shared/layouts/AuthLayout";
 import TextInput from "../../../shared/components/TextInput";
 import Button from "../../../shared/components/Button";
@@ -19,8 +20,8 @@ export default function JoinOrganizationPage() {
     setIsSubmitting(true);
 
     try {
-      await joinOrganization(joinCode);
-      navigate("/home", { replace: true });
+      const user = await joinOrganization(joinCode);
+      navigate(getWorkspaceRoute(user), { replace: true });
     } catch (requestError) {
       setError(
         requestError.response?.data?.join_code?.[0] ??

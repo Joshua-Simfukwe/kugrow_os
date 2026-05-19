@@ -1,9 +1,13 @@
+import hashlib
 import secrets
 import string
+import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 from .managers import UserManager
@@ -111,6 +115,8 @@ class UserProfile(models.Model):
         related_name="profile",
     )
     full_name = models.CharField(max_length=150)
+    phone_number = models.CharField(max_length=30, blank=True)
+    phone_verified_at = models.DateTimeField(null=True, blank=True)
     active_organization = models.ForeignKey(
         "Organization",
         on_delete=models.SET_NULL,
@@ -130,6 +136,12 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return self.full_name
+
+    def get_masked_phone_number(self):
+        digits = "".join(character for character in self.phone_number if character.isdigit())
+        if len(digits) >= 2:
+            return f"**{digits[-2:]}"
+        return ""
 
 
 class OrganizationMembership(models.Model):
@@ -210,3 +222,84 @@ class OrganizationMembership(models.Model):
             if module_key in self.AVAILABLE_MODULES
         ]
         return valid_modules or self.default_module_access_for_role(self.role)
+
+
+class PhoneVerificationChallenge(models.Model):
+    CODE_LENGTH = 6
+    DEFAULT_EXPIRY_SECONDS = 5 * 60
+    MAX_ATTEMPTS = 5
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="phone_verification_challenges",
+    )
+    phone_number = models.CharField(max_length=30, blank=True)
+    code_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    resend_count = models.PositiveSmallIntegerField(default=0)
+    last_sent_at = models.DateTimeField()
+    verified_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Phone challenge for {self.user.email}"
+
+    @staticmethod
+    def generate_code(length=CODE_LENGTH):
+        return "".join(secrets.choice(string.digits) for _ in range(length))
+
+    @staticmethod
+    def hash_code(code):
+        return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def issue_for_user(cls, user, phone_number="", code=None):
+        cls.objects.filter(user=user, verified_at__isnull=True).delete()
+        challenge = cls(user=user, phone_number=phone_number or "")
+        challenge.refresh_code(code=code)
+        challenge.save()
+        return challenge
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def expires_in_seconds(self):
+        remaining = int((self.expires_at - timezone.now()).total_seconds())
+        return max(remaining, 0)
+
+    def refresh_code(self, code=None):
+        plaintext_code = code or self.generate_code()
+        now = timezone.now()
+        self.code_hash = self.hash_code(plaintext_code)
+        self.expires_at = now + timedelta(seconds=self.DEFAULT_EXPIRY_SECONDS)
+        self.last_sent_at = now
+        self.verified_at = None
+        if self.pk:
+            self.resend_count += 1
+        self._plaintext_code = plaintext_code
+        return plaintext_code
+
+    def verify_code(self, submitted_code):
+        if self.verified_at is not None or self.is_expired:
+            return False
+        if self.attempt_count >= self.MAX_ATTEMPTS:
+            return False
+
+        self.attempt_count += 1
+        matches = secrets.compare_digest(
+            self.code_hash,
+            self.hash_code(submitted_code),
+        )
+        if matches:
+            self.verified_at = timezone.now()
+        self.save(update_fields=["attempt_count", "verified_at", "updated_at"])
+        return matches

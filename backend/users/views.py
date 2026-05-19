@@ -8,7 +8,7 @@ from rest_framework.decorators import permission_classes
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Branch, OrganizationMembership
+from .models import Branch, OrganizationMembership, PhoneVerificationChallenge
 from .serializers import (
     AuthResponseSerializer,
     BranchSerializer,
@@ -22,8 +22,12 @@ from .serializers import (
     OrganizationMembershipSerializer,
     OrganizationSelectionSerializer,
     OrganizationSerializer,
+    PhoneVerificationChallengeSerializer,
+    ResendPhoneCodeSerializer,
     SignupSerializer,
+    VerifyPhoneCodeSerializer,
     build_auth_response,
+    build_phone_verification_response,
 )
 
 
@@ -43,9 +47,37 @@ def login(request):
     serializer = LoginSerializer(data=request.data, context={"request": request})
     if serializer.is_valid():
         user = serializer.validated_data["user"]
+        challenge = PhoneVerificationChallenge.issue_for_user(
+            user=user,
+            phone_number=user.profile.phone_number,
+        )
+        response_serializer = PhoneVerificationChallengeSerializer(
+            build_phone_verification_response(challenge)
+        )
+        return Response(response_serializer.data, status=status.HTTP_202_ACCEPTED)
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+def verify_phone_code(request):
+    serializer = VerifyPhoneCodeSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
         response_serializer = AuthResponseSerializer(build_auth_response(user))
         return Response(response_serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+@api_view(["POST"])
+def resend_phone_code(request):
+    serializer = ResendPhoneCodeSerializer(data=request.data)
+    if serializer.is_valid():
+        challenge = serializer.save()
+        response_serializer = PhoneVerificationChallengeSerializer(
+            build_phone_verification_response(challenge)
+        )
+        return Response(response_serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

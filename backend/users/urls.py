@@ -12,11 +12,15 @@ from .views import (
     organization_team_member_detail,
     select_organization,
     signup,
+    resend_phone_code,
+    verify_phone_code,
 )
 
 urlpatterns = [
     path("signup/", signup),
     path("login/", login),
+    path("phone-verification/verify/", verify_phone_code),
+    path("phone-verification/resend/", resend_phone_code),
     path("logout/", logout),
     path("me/", me),
     path("organizations/", organization_list),

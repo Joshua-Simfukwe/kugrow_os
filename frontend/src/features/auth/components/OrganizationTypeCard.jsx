@@ -1,3 +1,5 @@
+import MaterialSymbol from "../../../shared/components/MaterialSymbol";
+
 export default function OrganizationTypeCard({
   title,
   description,
@@ -21,13 +23,9 @@ export default function OrganizationTypeCard({
     >
       <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
         {isRetail ? (
-          <svg viewBox="0 0 24 24" className="h-10 w-10 fill-current">
-            <path d="M4 8.75 5.4 4h13.2L20 8.75V10a2.75 2.75 0 0 1-1 2.13V20H5v-7.87A2.75 2.75 0 0 1 4 10V8.75Zm3 .75V18h10V9.5H7Zm1.3-3.5-.59 2h8.58l-.59-2H8.3Z" />
-          </svg>
+          <MaterialSymbol name="storefront" className="text-[2.5rem]" weight={300} opticalSize={40} />
         ) : (
-          <svg viewBox="0 0 24 24" className="h-10 w-10 fill-current">
-            <path d="M12 3 2 8.5 12 14l8-4.4V17h2V8.5L12 3Zm-6 9.4V16l6 3.3 6-3.3v-3.6L12 16l-6-3.6Z" />
-          </svg>
+          <MaterialSymbol name="school" className="text-[2.5rem]" weight={300} opticalSize={40} />
         )}
       </div>
 

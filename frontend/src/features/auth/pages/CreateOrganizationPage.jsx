@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../context/useAuth";
+import { getWorkspaceRoute } from "../utils/authRoutes";
 import AuthLayout from "../../../shared/layouts/AuthLayout";
 import Button from "../../../shared/components/Button";
 
@@ -28,11 +29,11 @@ export default function CreateOrganizationPage() {
     setIsSubmitting(true);
 
     try {
-      await createOrganization({
+      const user = await createOrganization({
         name: organizationName,
         organization_type: organizationType,
       });
-      navigate("/home", { replace: true });
+      navigate(getWorkspaceRoute(user), { replace: true });
     } catch (requestError) {
       setError(
         requestError.response?.data?.name?.[0] ??

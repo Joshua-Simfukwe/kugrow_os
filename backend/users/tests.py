@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Branch, Organization, OrganizationMembership, UserProfile
+from .models import Branch, Organization, OrganizationMembership, PhoneVerificationChallenge, UserProfile
 
 User = get_user_model()
 
@@ -28,16 +28,17 @@ class OnboardingApiTests(APITestCase):
         )
         return organization
 
-    def create_user_with_profile(self, email, full_name="Test User"):
+    def create_user_with_profile(self, email, full_name="Test User", phone_number="+260977000073"):
         user = User.objects.create_user(
             email=email,
             password="strongpass123",
         )
         user.profile.full_name = full_name
-        user.profile.save(update_fields=["full_name", "updated_at"])
+        user.profile.phone_number = phone_number
+        user.profile.save(update_fields=["full_name", "phone_number", "updated_at"])
         return user
 
-    def authenticate(self, user):
+    def start_login(self, user):
         response = self.client.post(
             "/api/auth/login/",
             {
@@ -46,7 +47,22 @@ class OnboardingApiTests(APITestCase):
             },
             format="json",
         )
-        token = response.data["token"]
+        return response
+
+    def authenticate(self, user):
+        challenge_response = self.start_login(user)
+        challenge = PhoneVerificationChallenge.objects.get(pk=challenge_response.data["challenge_id"])
+        challenge.refresh_code(code="111111")
+        challenge.save(update_fields=["code_hash", "expires_at", "last_sent_at", "verified_at", "updated_at"])
+        verify_response = self.client.post(
+            "/api/auth/phone-verification/verify/",
+            {
+                "challenge_id": challenge_response.data["challenge_id"],
+                "code": "111111",
+            },
+            format="json",
+        )
+        token = verify_response.data["token"]
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
         return token
 
@@ -95,37 +111,37 @@ class OnboardingApiTests(APITestCase):
         user = self.create_user_with_profile("jane@example.com", "Jane Doe")
         organization = self.create_organization_with_owner(user, name="Kugrow Enterprises")
 
-        response = self.client.post(
-            "/api/auth/login/",
-            {
-                "email": "jane@example.com",
-                "password": "strongpass123",
-            },
-            format="json",
-        )
+        response = self.start_login(user)
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("token", response.data)
-        self.assertEqual(response.data["user"]["email"], "jane@example.com")
-        self.assertEqual(len(response.data["user"]["organizations"]), 1)
-        self.assertEqual(response.data["user"]["organizations"][0]["name"], "Kugrow Enterprises")
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertIn("challenge_id", response.data)
+        self.assertEqual(response.data["full_name"], "Jane Doe")
+        self.assertEqual(response.data["masked_phone_number"], "**73")
 
     def test_login_rotates_existing_token(self):
         user = self.create_user_with_profile("rotate@example.com", "Rotate User")
+        first_challenge = self.start_login(user)
+        first_challenge_record = PhoneVerificationChallenge.objects.get(pk=first_challenge.data["challenge_id"])
+        first_challenge_record.refresh_code(code="111111")
+        first_challenge_record.save(update_fields=["code_hash", "expires_at", "last_sent_at", "verified_at", "updated_at"])
         first_response = self.client.post(
-            "/api/auth/login/",
+            "/api/auth/phone-verification/verify/",
             {
-                "email": user.email,
-                "password": "strongpass123",
+                "challenge_id": first_challenge.data["challenge_id"],
+                "code": "111111",
             },
             format="json",
         )
 
+        second_challenge = self.start_login(user)
+        second_challenge_record = PhoneVerificationChallenge.objects.get(pk=second_challenge.data["challenge_id"])
+        second_challenge_record.refresh_code(code="222222")
+        second_challenge_record.save(update_fields=["code_hash", "expires_at", "last_sent_at", "verified_at", "updated_at"])
         second_response = self.client.post(
-            "/api/auth/login/",
+            "/api/auth/phone-verification/verify/",
             {
-                "email": user.email,
-                "password": "strongpass123",
+                "challenge_id": second_challenge.data["challenge_id"],
+                "code": "222222",
             },
             format="json",
         )
@@ -133,6 +149,39 @@ class OnboardingApiTests(APITestCase):
         self.assertEqual(first_response.status_code, status.HTTP_200_OK)
         self.assertEqual(second_response.status_code, status.HTTP_200_OK)
         self.assertNotEqual(first_response.data["token"], second_response.data["token"])
+
+    def test_verify_phone_rejects_wrong_code(self):
+        user = self.create_user_with_profile("wrongcode@example.com", "Wrong Code")
+        challenge_response = self.start_login(user)
+
+        response = self.client.post(
+            "/api/auth/phone-verification/verify/",
+            {
+                "challenge_id": challenge_response.data["challenge_id"],
+                "code": "000000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("code", response.data)
+
+    def test_resend_phone_code_rotates_debug_code(self):
+        user = self.create_user_with_profile("resend@example.com", "Resend User")
+        challenge_response = self.start_login(user)
+
+        response = self.client.post(
+            "/api/auth/phone-verification/resend/",
+            {
+                "challenge_id": challenge_response.data["challenge_id"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["challenge_id"], challenge_response.data["challenge_id"])
+        challenge = PhoneVerificationChallenge.objects.get(pk=challenge_response.data["challenge_id"])
+        self.assertGreater(challenge.resend_count, 0)
 
     def test_me_requires_authentication(self):
         response = self.client.get("/api/auth/me/")

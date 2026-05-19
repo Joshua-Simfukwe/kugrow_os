@@ -22,7 +22,7 @@ export function hasModuleAccess(user, moduleKey) {
   return allowedModules.includes(moduleKey);
 }
 
-function getFirstAccessibleWorkspaceRoute(user) {
+export function getWorkspaceRoute(user) {
   if (user?.active_membership?.organization_type === "education") {
     return "/dashboard";
   }
@@ -37,30 +37,10 @@ function getFirstAccessibleWorkspaceRoute(user) {
   return "/home";
 }
 
-export function getHomeRoute(user) {
-  if (!user) {
-    return "/login";
-  }
-
-  if (!user.organizations?.length) {
-    return "/create-organization";
-  }
-
-  if (!user.profile?.active_organization) {
-    return "/organizations";
-  }
-
-  return getFirstAccessibleWorkspaceRoute(user);
+export function getHomeRoute() {
+  return "/organizations";
 }
 
-export function getPostLoginRoute(user) {
-  if (!user.organizations?.length) {
-    return "/create-organization";
-  }
-
-  if (user.profile?.active_organization) {
-    return getHomeRoute(user);
-  }
-
+export function getPostLoginRoute() {
   return "/organizations";
 }

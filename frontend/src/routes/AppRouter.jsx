@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import LoginPage from "../features/auth/pages/LoginPage";
+import PhoneVerificationPage from "../features/auth/pages/PhoneVerificationPage";
 import SignupPage from "../features/auth/pages/SignupPage";
 import OrganizationSelectPage from "../features/auth/pages/OrganizationSelectPage";
 import CreateOrganizationPage from "../features/auth/pages/CreateOrganizationPage";
@@ -16,6 +17,7 @@ import {
   AuthenticatedRoute,
   GuestOnlyRoute,
   ModuleRoute,
+  PhoneVerificationRoute,
   RootRedirect,
   WorkspaceRoute,
 } from "./RouteGuards";
@@ -28,6 +30,10 @@ export default function AppRouter() {
       <Route element={<GuestOnlyRoute />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
+      </Route>
+
+      <Route element={<PhoneVerificationRoute />}>
+        <Route path="/verify-phone" element={<PhoneVerificationPage />} />
       </Route>
 
       <Route element={<AuthenticatedRoute />}>
