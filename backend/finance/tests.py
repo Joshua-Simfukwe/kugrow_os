@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from inventory.models import Category, Product
 from sales.models import Sale
 from users.models import Branch, Organization, OrganizationMembership
+from education.models import FeeInvoice, FeePayment, Guardian, SchoolClass, Student
 
 from .models import Expense, ExpenseCategory
 
@@ -96,3 +97,58 @@ class FinanceApiTests(APITestCase):
         response = self.client.get("/api/finance/dashboard/summary/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_dashboard_summary_returns_education_metrics(self):
+        education_org = Organization.objects.create(
+            name="Mukulumpa Primary",
+            organization_type=Organization.OrganizationType.EDUCATION,
+            created_by=self.user,
+        )
+        OrganizationMembership.objects.create(
+            user=self.user,
+            organization=education_org,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        school_class = SchoolClass.objects.create(
+            organization=education_org,
+            name="Grade 7",
+        )
+        guardian = Guardian.objects.create(
+            organization=education_org,
+            full_name="Parent One",
+        )
+        student = Student.objects.create(
+            organization=education_org,
+            school_class=school_class,
+            guardian=guardian,
+            admission_number="ADM-001",
+            first_name="Chanda",
+            last_name="Mwila",
+        )
+        invoice = FeeInvoice.objects.create(
+            organization=education_org,
+            student=student,
+            term_label="Term 2",
+            amount_due=3000,
+            amount_paid=0,
+            balance_due=3000,
+            created_by=self.user,
+        )
+        FeePayment.objects.create(
+            organization=education_org,
+            invoice=invoice,
+            amount=1200,
+            payment_method="CASH",
+            created_by=self.user,
+        )
+        self.user.profile.active_organization = education_org
+        self.user.profile.active_branch = None
+        self.user.profile.save(update_fields=["active_organization", "active_branch", "updated_at"])
+
+        response = self.client.get("/api/finance/dashboard/summary/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["organization_type"], "education")
+        self.assertEqual(len(response.data["headline_metrics"]), 5)
+        self.assertEqual(response.data["tables"][0]["title"], "Unpaid Balances")
+        self.assertEqual(response.data["tables"][1]["title"], "Recent Fee Payments")

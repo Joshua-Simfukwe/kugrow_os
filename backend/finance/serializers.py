@@ -91,29 +91,137 @@ def _format_currency(value):
 
 def build_dashboard_summary(organization):
     if organization.organization_type == organization.OrganizationType.EDUCATION:
+        today = timezone.localdate()
         total_students = Student.objects.filter(organization=organization, is_active=True).count()
         total_classes = SchoolClass.objects.filter(organization=organization, is_active=True).count()
+        total_expected = (
+            FeeInvoice.objects.filter(organization=organization).aggregate(total=Sum("amount_due")).get("total")
+            or 0
+        )
         total_collected = FeePayment.objects.filter(organization=organization).aggregate(total=Sum("amount")).get("total") or 0
-        total_outstanding = FeeInvoice.objects.filter(organization=organization).aggregate(total=Sum("balance_due")).get("total") or 0
+        total_outstanding = (
+            FeeInvoice.objects.filter(organization=organization).aggregate(total=Sum("balance_due")).get("total")
+            or 0
+        )
+        todays_collection = (
+            FeePayment.objects.filter(organization=organization, received_on=today)
+            .aggregate(total=Sum("amount"))
+            .get("total")
+            or 0
+        )
+        todays_payment_count = FeePayment.objects.filter(
+            organization=organization,
+            received_on=today,
+        ).count()
+        collection_rate = (
+            round((float(total_collected) / float(total_expected)) * 100, 1)
+            if total_expected
+            else 0
+        )
+        outstanding_rows = [
+            {
+                "label": invoice.student.full_name,
+                "subtext": invoice.student.school_class.name,
+                "value": _format_currency(invoice.balance_due),
+                "tone": "warning",
+            }
+            for invoice in (
+                FeeInvoice.objects.filter(
+                    organization=organization,
+                    balance_due__gt=0,
+                )
+                .select_related("student__school_class")
+                .order_by("-balance_due", "student__last_name", "student__first_name")[:5]
+            )
+        ]
         recent_payments = [
             {
                 "label": payment.invoice.student.full_name,
-                "subtext": payment.receipt_number,
-                "value": str(payment.amount),
+                "subtext": payment.receipt_number or payment.received_on.strftime("%d %b %Y"),
+                "value": _format_currency(payment.amount),
+                "tone": "positive",
             }
-            for payment in FeePayment.objects.filter(organization=organization).select_related("invoice__student")[:5]
+            for payment in (
+                FeePayment.objects.filter(organization=organization)
+                .select_related("invoice__student")
+                .order_by("-received_on", "-id")[:5]
+            )
         ]
 
         return {
             "organization_type": "education",
+            "overview": {
+                "school_name": organization.name,
+                "organization_type": organization.get_organization_type_display(),
+                "collection_rate": collection_rate,
+            },
             "headline_metrics": [
-                {"label": "Enrolled Pupils", "value": total_students},
-                {"label": "Classes", "value": total_classes},
-                {"label": "Fees Collected", "value": f"ZMW {total_collected:.2f}"},
-                {"label": "Outstanding Balances", "value": f"ZMW {total_outstanding:.2f}"},
+                {"label": "Enrolled Pupils", "value": total_students, "note": "Active pupils"},
+                {
+                    "label": "Total Fees Expected",
+                    "value": _format_currency(total_expected),
+                    "note": f"{total_classes} active class(es)",
+                },
+                {
+                    "label": "Fees Collected",
+                    "value": _format_currency(total_collected),
+                    "note": f"{collection_rate}% collected",
+                },
+                {
+                    "label": "Outstanding Balance",
+                    "value": _format_currency(total_outstanding),
+                    "note": "Requires follow-up",
+                },
+                {
+                    "label": "Today's Collection",
+                    "value": _format_currency(todays_collection),
+                    "note": f"{todays_payment_count} payment(s) today",
+                },
             ],
             "charts": [],
+            "quick_actions": [
+                {
+                    "label": "Record Fee Payment",
+                    "caption": "Bursar receipt",
+                    "tone": "primary",
+                    "available": False,
+                },
+                {
+                    "label": "Print Receipt",
+                    "caption": "Reprint official receipt",
+                    "tone": "secondary",
+                    "available": False,
+                },
+                {
+                    "label": "Print Unpaid Balances",
+                    "caption": "Class or school list",
+                    "tone": "secondary",
+                    "available": False,
+                },
+                {
+                    "label": "Add Pupil",
+                    "caption": "New enrollment",
+                    "tone": "secondary",
+                    "available": False,
+                },
+                {
+                    "label": "Payment History",
+                    "caption": "Search transactions",
+                    "tone": "secondary",
+                    "available": False,
+                },
+                {
+                    "label": "Sell Uniform",
+                    "caption": "Other sales",
+                    "tone": "secondary",
+                    "available": False,
+                },
+            ],
             "tables": [
+                {
+                    "title": "Unpaid Balances",
+                    "rows": outstanding_rows,
+                },
                 {
                     "title": "Recent Fee Payments",
                     "rows": recent_payments,

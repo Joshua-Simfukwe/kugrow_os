@@ -1,56 +1,65 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { useAuth } from "../../features/auth/context/useAuth";
 import AppSidebar from "../components/AppSidebar";
+import MaterialSymbol from "../components/MaterialSymbol";
 
 export default function AppLayout({ children }) {
-  const [mobileMenuOpen, setMobileMenuOpen] =
-    useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user } = useAuth();
+  const organizationName =
+    user?.profile?.active_organization?.name ?? "Workspace";
+  const isEducation =
+    user?.active_membership?.organization_type === "education";
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Mobile Topbar */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 md:hidden">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-600">
-            Powered by Kugrow OS
-          </p>
-          <h1 className="text-lg font-bold text-gray-900">
-            {user?.profile?.active_organization?.name ?? "Workspace"}
-          </h1>
-        </div>
-
-        <button
-          onClick={() =>
-            setMobileMenuOpen(!mobileMenuOpen)
-          }
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-        >
-          Menu
-        </button>
-      </div>
-
-      <div className="flex">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_45%,#e9f1ff_100%)]">
+      <div className="flex min-h-screen">
         <AppSidebar
           mobileMenuOpen={mobileMenuOpen}
           setMobileMenuOpen={setMobileMenuOpen}
         />
 
-        {/* Mobile Overlay */}
         {mobileMenuOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black/40 md:hidden"
-            onClick={() =>
-              setMobileMenuOpen(false)
-            }
+            className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-[2px] md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
           />
         )}
 
-        {/* Main Content */}
-        <main className="min-h-screen flex-1 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_100%)] p-6">
-          {children}
-        </main>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white/88 px-4 py-4 backdrop-blur-[10px] md:hidden">
+            <div>
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-blue-600">
+                {isEducation ? "School Workspace" : "Business Workspace"}
+              </p>
+              <h1 className="mt-1 text-lg font-bold tracking-tight text-slate-950">
+                {organizationName}
+              </h1>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to="/organizations"
+                className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-slate-200 bg-white text-blue-600 shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
+                aria-label="Back to organizations"
+              >
+                <MaterialSymbol name="arrow_forward" className="rotate-180 text-[1.35rem]" />
+              </Link>
+
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="flex h-11 w-11 items-center justify-center rounded-[1rem] border border-slate-200 bg-white text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
+                aria-label="Open menu"
+              >
+                <span className="text-sm font-semibold">Menu</span>
+              </button>
+            </div>
+          </div>
+
+          <main className="min-h-screen p-4 sm:p-6 lg:p-8">{children}</main>
+        </div>
       </div>
     </div>
   );
